@@ -24,7 +24,9 @@
 extern volatile TCB_t *g_current;
 extern volatile TCB_t *g_next;
 
-
+static inline TickType diff_wrap(TickType cur, TickType start, TickType max) {
+    return (cur >= start) ? (cur - start) : (max - start + cur);
+}
 /* =========================================================
  *  API Kernel cho ứng dụng
  * ========================================================= */
@@ -78,6 +80,14 @@ void ClearEvent(EventMaskType mask);
 void SetRelAlarm(uint8_t aid, uint32_t delay_ms, uint32_t cycle_ms, uint8_t target_tid);
 void SetAbsAlarm(uint8_t aid, uint32_t delay_ms, uint32_t cycle_ms, uint8_t target_tid);
 void SetUpAlarm();
+
+/*  Hàm Schedule Table*/
+void StartSchedulTblRel(uint8_t sid, TickType offset);
+void StartSchedulTblAbs(uint8_t sid, TickType start);
+void StopSchedulTbl(uint8_t sid);
+void SyncSchedulTbl(uint8_t sid, TickType new_offset);
+void Schedul_Tick(CounterType cid);
+void Setup_SchTbl(void);
 /* Hàm Tick do PORT gọi mỗi nhịp SysTick (được gọi từ SysTick_Handler trong os_port.c) */
 void os_on_tick(void);
 

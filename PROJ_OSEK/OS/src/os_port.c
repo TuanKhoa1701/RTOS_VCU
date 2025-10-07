@@ -8,7 +8,7 @@
  */
 
 #include "os_port.h"
-#include "os_config.h"   /* nếu bạn có file cấu hình riêng; không bắt buộc */
+#include "os_config.h"  /* nếu bạn có file cấu hình riêng; không bắt buộc */
 #include "stm32f10x.h"
 #include "core_cm3.h"
 

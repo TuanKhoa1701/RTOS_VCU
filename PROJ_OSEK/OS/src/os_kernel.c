@@ -135,7 +135,7 @@ static inline bool rq_pop_raw(uint8_t *out_tid)
 static volatile uint32_t s_tick = 0;
 static OsAlarm_t alarm_tbl[OS_MAX_ALARMS];
 OsCounter_t *alarm_to_counter[OS_MAX_ALARMS];
-
+OsSchedTbl Schedule_Table_List[OS_MAX_SchedTbl];
 /* Quy đổi ms → tick (làm tròn lên, tối thiểu 1 tick nếu ms>0) */
 static inline uint32_t ms_to_ticks(uint32_t ms)
 {
@@ -158,6 +158,10 @@ extern void Task_B(void *arg);
 extern void Task_C(void *arg);
 extern void Task_Idle(void *arg);
 
+
+extern void SetMode_Normal(void);
+extern void SetMode_Warning(void);
+extern void SetMode_Off(void);
 /* =========================================================
  * schedule()
  * ---------------------------------------------------------
@@ -367,7 +371,7 @@ void os_on_tick(void)
             }   
         }
     }
-
+    ScheduleTable_tick(0);
     /* Giảm latency: nếu chưa có pending switch và đang ở IDLE → chọn ngay */
     if ((g_next == NULL) && (g_current == &tcb[TASK_IDLE])) {
         (void)schedule();
@@ -420,7 +424,134 @@ void ClearEvent(EventMaskType mask){
     TCB_t *t = &tcb[g_current->id];
     t->SetEvent &= ~ mask;
 }
+/*      API cho Schedule Table       */
+void StartSchedulTblRel(uint8_t sid, TickType offset){
 
+    if(sid >= OS_MAX_SchedTbl) return;
+    OsSchedTbl *s = &Schedule_Table_List[sid];
+    if(s->state != ST_STOP)  return;
+    if(offset >= s->counter->max_allowed_Value) return;
+
+    s->start = (s->counter->current_value + offset) % s->counter->max_allowed_Value;
+    s->current_ep =0;
+    s->state = ST_WAITING_START;
+}
+
+
+void StopSchedulTbl(uint8_t sid){
+    if(sid >= OS_MAX_SchedTbl) return;
+    OsSchedTbl *s = &Schedule_Table_List[sid];
+    if(s->state == ST_STOP)  return;
+
+    s->state = ST_STOP;
+    s->current_ep =0;
+}
+
+void SyncSchedulTbl(uint8_t sid, TickType new_offset){
+    if(sid >= OS_MAX_SchedTbl) return ;
+    OsSchedTbl *s = &Schedule_Table_List[sid];
+    if(s->state == ST_STOP) return
+
+    s->start = (s->counter->current_value + new_offset) % s->counter->max_allowed_Value;
+    s->current_ep = 0;
+    s->state = ST_WAITING_START;
+}
+
+void ScheduleTable_tick(CounterType cid){
+    OsCounter_t *c = &Counter_tbl[cid];
+
+    for(int i=0;i < OS_MAX_SchedTbl; i++){
+        OsSchedTbl *s = &Schedule_Table_List[cid];
+        
+        if( s-> counter != c || s-> state == ST_STOP) continue;
+        TickType cur = c->current_value;
+        TickType max = c->max_allowed_Value;
+        TickType elapsed_from_start = diff_wrap(cur, s->start, max);
+
+        if(s -> state == ST_WAITING_START){
+            if(elapsed_from_start < s->duration){
+                s->state = ST_RUNNING;
+                s->current_ep = 0;
+
+                while(s->current_ep < s->num_eps && s->eps[s->current_ep].offset <= elapsed_from_start){
+                    Expiry_Point *ep = &s->eps[s->current_ep];
+                    switch(ep->action_type){
+                        case SCH_ACTIVATE_TASK:
+                            ActivateTask(ep->action.tid);
+                            break;
+                        case SCH_SET_EVENT:
+                            SetEvent(ep->action.Set_event.tid,ep->action.Set_event.mask);
+                            break;
+                        case SCH_CALLBACK:
+                            ep->action.callback_fn();
+                            break;
+                    }
+                    s->current_ep++;
+                }
+
+            } else {
+                if(s->cyclic){
+                    TickType periods_skipped = elapsed_from_start / s->duration;
+                    s->start = (s->start + periods_skipped *s->duration) % max;
+                    s->current_ep = 0;
+                    s->state = ST_WAITING_START;
+                } else{
+                    s->state = ST_STOP;
+                    s->current_ep=0;
+                }
+            }
+            continue;
+        }
+        if(s->state == ST_RUNNING){
+            while (s->current_ep < s->num_eps && s->eps[s->current_ep].offset <= elapsed_from_start){
+                Expiry_Point *ep = &s->eps[s->current_ep];
+                switch(ep->action_type){
+                    case SCH_ACTIVATE_TASK:
+                        ActivateTask(ep->action.tid);
+                        break;
+                    case SCH_SET_EVENT:
+                        SetEvent(ep->action.Set_event.tid,ep->action.Set_event.mask);
+                        break;
+                    case SCH_CALLBACK:
+                        ep->action.callback_fn();
+                        break;
+                }   
+                s->current_ep++;
+            }
+            if(elapsed_from_start >= s->duration){
+                if(s->cyclic){
+                    TickType Period_skipped = elapsed_from_start / s->duration;
+                    s->start = (s->start + Period_skipped * s->duration) %max;
+                    s->current_ep = 0;
+                    s->state = ST_WAITING_START;
+
+                    TickType e2 = diff_wrap(cur, s->start, max);
+                    if (e2 < s->duration) {
+                        s->state = ST_RUNNING;
+                        while (s->current_ep < s->num_eps && s->eps[s->current_ep].offset <= e2) {
+                            Expiry_Point *ep = &s->eps[s->current_ep];
+                        switch(ep->action_type){
+                            case SCH_ACTIVATE_TASK:
+                                ActivateTask(ep->action.tid);
+                                break;
+                            case SCH_SET_EVENT:
+                                SetEvent(ep->action.Set_event.tid,ep->action.Set_event.mask);
+                                break;
+                            case SCH_CALLBACK:
+                                ep->action.callback_fn();
+                                break;
+                            }
+                            s->current_ep++;
+                         }
+                    }
+                 } else{
+                    s->state = ST_STOP;
+                    s->current_ep = 0;
+                 }
+            }
+        }
+    }   
+}
 /* Alias nếu nơi khác gọi tên này */
 void os_tick_handler(void)
 {
@@ -471,9 +602,10 @@ void OS_Init(void)
     g_current = &tcb[TASK_INIT];
 
     /* ví dụ alarm */
-    SetRelAlarm(0u, 500u, 1000u, TASK_A);
-    SetRelAlarm(1u, 600u,  500u, TASK_B);
-    SetRelAlarm(2u, 300u,  400u, TASK_C);
+    //SetRelAlarm(0u, 500u,  500u, TASK_A);
+    StartSchedulTblRel(0,50);
+    // SetRelAlarm(1u, 600u,  500u, TASK_B);
+    // SetRelAlarm(2u, 300u,  400u, TASK_C);
 
     __enable_irq();
 }
@@ -496,15 +628,19 @@ void SetUpAlarm(){
     alarm_tbl[0].action_type = ALARMACTION_ACTIVATETASK;
     alarm_tbl[0].action.target_task = TASK_A;
 
-    alarm_to_counter[1] = &Counter_tbl[0];
-    Counter_tbl[0].alarm_list[Counter_tbl[0].num_alarms++] = &alarm_tbl[1];
+}
 
-    alarm_tbl[1].action_type = ALARMACTION_ACTIVATETASK;
-    alarm_tbl[1].action.target_task = TASK_B;
+void Setup_SchTbl(void){
+    OsSchedTbl *s = &Schedule_Table_List[0];
 
-    alarm_to_counter[2] = &Counter_tbl[0];
-    Counter_tbl[0].alarm_list[Counter_tbl[0].num_alarms++] = &alarm_tbl[2];
+    s->counter = &Counter_tbl[0];
+    s->cyclic = 1;
+    s->duration = 5000;
+    s->num_eps = 3;
 
-    alarm_tbl[2].action_type = ALARMACTION_ACTIVATETASK;
-    alarm_tbl[2].action.target_task = TASK_C;
+    s->eps[0] = (Expiry_Point) {.offset = 0,    .action_type  = SCH_ACTIVATE_TASK,  .action.tid = TASK_A};
+    s->eps[1] = (Expiry_Point) {.offset = 2000, .action_type  = SCH_ACTIVATE_TASK,  .action.tid = TASK_B};
+    //s->eps[2] = (Expiry_Point) {.offset = 8000, .action_type  = SCH_CALLBACK,  .action.callback_fn = SetMode_Off};
+
+
 }

@@ -4,6 +4,11 @@
 #include "stm32f10x_gpio.h"
 #include "stm32f10x_usart.h"
 
+
+LedState g_mode;
+void SetMode_Normal(void)   { g_mode = MODE_NORMAL;}
+void SetMode_Warning(void)  { g_mode = MODE_WARNING;}
+void SetMode_Off(void)      { g_mode = MODE_OFF;}
 /* =========================================================
  * BSP: LED PC13 (BluePill – thường active-low)
  *  - Dùng SPL thay vì truy cập thanh ghi trực tiếp
@@ -150,8 +155,30 @@ void Task_C (void *arg){
 void Task_A(void *arg)
 {
     (void)arg;
+    static uint16_t accA = 0, accB =0;
+    const uint16_t period_normal =150;
+    const uint16_t period_warn   =50;
 
-    led_toggle();
+    switch (g_mode){
+        case MODE_NORMAL:
+            accA += 50;
+            if(accA == period_normal){
+                led_toggle();
+                accA=0;
+            }
+            break;
+        case MODE_WARNING:  
+            accB += 50;
+            if(accB == period_warn){
+                led_toggle();
+                accB=0;
+            }
+            break;
+        default:
+        GPIO_WriteBit(GPIOC, GPIO_Pin_13, 1);
+        accA = accB = 0;
+        break;
+    }
     TerminateTask();
 }
 
@@ -188,11 +215,11 @@ void Task_Init(void *arg)
     gpio_init_led();
 
     /* 2) UART1 TX 115200 */
-    uart1_init_115200();
-    uart1_send_string("[BOOT] Peripherals initialized.\r\n");
+    // uart1_init_115200();
+    // uart1_send_string("[BOOT] Peripherals initialized.\r\n");
     
     SetUpAlarm();
-
+    Setup_SchTbl();
     /* 3) Kết thúc task init (nhường CPU cho task khác) */
     TerminateTask();
 }

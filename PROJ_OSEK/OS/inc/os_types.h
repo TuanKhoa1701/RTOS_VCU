@@ -12,12 +12,16 @@
 #ifndef OS_MAX_ALARMS
 #  define OS_MAX_ALARMS         4u
 #endif
+
 #define OS_MAX_COUNTER          2u
 #define EVENT_BUTTON_PRESSED    1u 
+#define OS_MAX_EXPIRY_POINT     5u
+#define OS_MAX_SchedTbl         3u
 
 typedef uint32_t EventMaskType;
 typedef uint8_t TaskType;
 typedef uint8_t CounterType;
+typedef uint32_t TickType;
 /* ID Task do ứng dụng quy ước (bạn có thể đổi theo dự án) */
 enum {
     TASK_INIT = 0u,
@@ -26,8 +30,17 @@ enum {
     TASK_C    = 3u,
     TASK_IDLE = 4u
 };
+typedef enum{
+    MODE_NORMAL,
+    MODE_WARNING,
+    MODE_OFF
+} LedState;
+typedef enum{
+    ST_STOP,
+    ST_WAITING_START,
+    ST_RUNNING
 
-
+}SchedTblState;
 /* Trạng thái Task đơn giản */
 typedef enum {
     OS_DORMANT = 0,   /* "ngủ" - chưa sẵn sàng chạy */
@@ -65,7 +78,7 @@ typedef struct {
         uint8_t  target_task;  /* Task đích cần Activate */
         struct{
             TaskType task_id;
-            EventMaskType mask;
+            EventMaskType mask  
         } Set_event;
         void(*callback)(void);
     }action;
@@ -80,3 +93,31 @@ typedef struct
     uint8_t num_alarms;
     OsAlarm_t *alarm_list[OS_MAX_ALARMS];
 } OsCounter_t;
+
+typedef struct 
+{
+    TickType offset;
+    enum {SCH_ACTIVATE_TASK, SCH_SET_EVENT, SCH_CALLBACK} action_type;
+    union{
+        TaskType tid;
+        struct 
+        {
+            TaskType tid;
+            EventMaskType mask;
+        } Set_event;
+        void (*callback_fn)(void);
+    } action;
+} Expiry_Point;
+
+typedef struct 
+{
+    SchedTblState state;
+    TickType start;
+    TickType duration;
+    uint8_t cyclic;
+    uint8_t current_ep;
+    uint8_t num_eps;
+    Expiry_Point eps[OS_MAX_EXPIRY_POINT];
+    OsCounter_t* counter;
+}OsSchedTbl;
+

@@ -118,7 +118,7 @@ pend_exit:
     .thumb_func
 SysTick_Handler:
     PUSH    {lr}                  /* lưu EXC_RETURN để BL không ghi đè */
-    BL      os_on_tick       /* gọi callback tick 1ms của OS */
+    BL      os_on_tick            /* gọi callback tick 1ms của OS */
     POP     {lr}                  /* khôi phục EXC_RETURN về LR */
     BX      lr                    /* exception return về ngữ cảnh trước ngắt */
 
@@ -156,6 +156,6 @@ SVC_Handler:
     LDR   r0, =0xFFFFFFFD
     BX    r0                      /* phần cứng tự POP HW-frame → nhảy vào PC của task */
 /* (Tùy thích) Khai báo kích thước symbol cho linker/map */
-    .size PendSV_Handler, . - PendSV_Handler
+    .size PendSV_Handler, . - PendSV_Handler    
     .size SysTick_Handler, . - SysTick_Handler
     .size SVC_Handler,     . - SVC_Handler

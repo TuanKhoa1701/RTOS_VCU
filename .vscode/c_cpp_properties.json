@@ -1,0 +1,39 @@
+{
+  "version": 4,
+  "configurations": [
+    {
+      "name": "STM32F103",
+      "includePath": [
+        "${workspaceFolder}",
+        "${workspaceFolder}/PROJ_OSEK/OS/inc",
+        "${workspaceFolder}/PROJ_OSEK/app",
+        "${workspaceFolder}/PROJ_OSEK/SPL/inc",
+        "${workspaceFolder}/PROJ_OSEK/CMSIS",
+        "${workspaceFolder}/PROJ_OSEK/Config"
+      ],
+      "defines": [
+        "USE_STDPERIPH_DRIVER",
+        "STM32F10X_MD"
+      ],
+      "compilerPath": "arm-none-eabi-gcc",
+      "compilerArgs": [
+        "-mcpu=cortex-m3",
+        "-mthumb"
+      ],
+      "cStandard": "c11",
+      "cppStandard": "c++17",
+      "intelliSenseMode": "gcc-arm",
+      "browse": {
+        "path": [
+          "${workspaceFolder}",
+          "${workspaceFolder}/OS/inc",
+          "${workspaceFolder}/app",
+          "${workspaceFolder}/SPL/inc",
+          "${workspaceFolder}/CMSIS",
+          "${workspaceFolder}/Config"
+        ],
+        "limitSymbolsToIncludedHeaders": true
+      }
+    }
+  ]
+}

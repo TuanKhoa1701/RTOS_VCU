@@ -1,0 +1,42 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug STM32F103 (OpenOCD)",
+            "type": "cortex-debug",
+            "request": "launch",
+            "servertype": "openocd",
+            "cwd": "${workspaceRoot}",
+            "executable": "${workspaceRoot}/PROJ_OSEK/Tools/os_test.elf",
+            "device": "STM32F103C8T6",
+            "configFiles": [
+                "interface/stlink.cfg",
+                "target/stm32f1x.cfg"
+            ],
+            "runToEntryPoint": "main",
+            "svdFile": "${workspaceRoot}/PROJ_OSEK/SPL/STM32F103.svd",
+            "postLaunchCommands": [
+                "monitor reset halt",
+                "monitor mmw 0x40010004 0x0 0x700", // clear AFIO_MAPR.MEM_MODE → alias=Flash
+                "monitor mww 0xE000ED08 0x08000000", // VTOR → Flash
+                "load", // nạp firmware
+                "monitor arm semihosting enable",
+                "monitor mdw 0xE000ED08 1" // kiểm tra: phải in 0x08000000
+            ],
+            "showDevDebugOutput": "both",
+            "registers": [
+                "r0",
+                "r1",
+                "r2",
+                "r3",
+                "r12",
+                "lr",
+                "pc",
+                "xPSR",
+                "sp",
+                "msp",
+                "psp"
+            ],
+        }
+    ]
+}
